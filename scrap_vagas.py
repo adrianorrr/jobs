@@ -5,6 +5,7 @@ from selenium.webdriver.support import expected_conditions as EC
 import time
 import random
 import pandas as pd
+import os
 
 # Função para realizar login manual
 # - wait_time: segundos para pausa após abrir a página de login
@@ -16,7 +17,7 @@ def login(driver, wait_time=15):
 # Função para extrair dados das vagas
 # - keyword: termo de busca
 # - max_pages: número máximo de páginas de resultados (escala de 25 em 25)
-def scrape_jobs(driver, keyword, max_pages=5):
+def scrape_jobs(driver, keyword, max_pages=40):
     resultados = []
     seen_ids = set()
 
@@ -25,7 +26,7 @@ def scrape_jobs(driver, keyword, max_pages=5):
         url = f"https://www.linkedin.com/jobs/search/?keywords={keyword}&start={start}"
         driver.get(url)
 
-        # Aguarda aparecimento de pelo menos um card clicável
+        # Aguarda carregamento inicial dos cards
         WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, "div.job-card-container--clickable"))
         )
@@ -58,26 +59,29 @@ def scrape_jobs(driver, keyword, max_pages=5):
             except:
                 titulo = "<Título não encontrado>"
 
-            # Nome da empresa
-            try:
-                empresa = card.find_element(By.CSS_SELECTOR, "span.jobs-search-results__company-name").text.strip()
-            except:
-                try:
-                    empresa = card.find_element(By.CSS_SELECTOR, "h4.job-card-container__company-name").text.strip()
-                except:
-                    empresa = "<Empresa não encontrada>"
-
-            # Clica no card e espera antes de coletar descrição
+            # Clica no card e espera antes de coletar detalhes
             driver.execute_script("arguments[0].scrollIntoView(true);", card)
             card.click()
-            time.sleep(random.uniform(1, 2))
+            time.sleep(random.uniform(2, 4))
+
+            # Nome da empresa a partir do painel de detalhes
+            try:
+                empresa = driver.find_element(
+                    By.CSS_SELECTOR,
+                    "div.job-details-jobs-unified-top-card__company-name a"
+                ).text.strip()
+            except:
+                empresa = "<Empresa não encontrada>"
 
             # Coleta descrição do painel lateral
             try:
                 WebDriverWait(driver, 10).until(
                     EC.presence_of_element_located((By.CSS_SELECTOR, "div.jobs-box__html-content#job-details"))
                 )
-                descricao = driver.find_element(By.CSS_SELECTOR, "div.jobs-box__html-content#job-details").text.strip()
+                descricao = driver.find_element(
+                    By.CSS_SELECTOR,
+                    "div.jobs-box__html-content#job-details"
+                ).text.strip()
             except:
                 descricao = "<Descrição não disponível>"
 
@@ -100,15 +104,22 @@ if __name__ == "__main__":
     driver = webdriver.Edge()  # ou webdriver.Chrome()
     try:
         login(driver)
-        vagas = scrape_jobs(driver, keyword="dados", max_pages=40)
+        vagas = scrape_jobs(driver, keyword="BI", max_pages=40)
+
+        # Cria DataFrame
+        df = pd.DataFrame(vagas)
+
+        # Define nome de arquivo sem sobrescrever versões existentes
+        arquivo = "vagas_collected3.xlsx"
+        base, ext = os.path.splitext(arquivo)
+        i = 1
+        while os.path.exists(arquivo):
+            arquivo = f"{base}({i}){ext}"
+            i += 1
 
         # Exporta para Excel
-        if vagas:
-            df = pd.DataFrame(vagas)
-            arquivo = "vagas_collected2.xlsx"
-            df.to_excel(arquivo, index=False)
-            print(f"Arquivo '{arquivo}' criado com sucesso com {len(vagas)} vagas.")
-        else:
-            print("Nenhuma vaga coletada. Nenhum arquivo será criado.")
+        df.to_excel(arquivo, index=False)
+        print(f"Arquivo '{arquivo}' criado com sucesso com {len(vagas)} vagas.")
+
     finally:
         driver.quit()
