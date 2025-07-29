@@ -14,7 +14,7 @@ def login(driver, wait_time=15):
     print("Faça login manualmente no LinkedIn...")
     time.sleep(wait_time)
 
-# Função para extrair dados das vagas
+# Função para extrair dados das vagas de um termo de busca
 # - keyword: termo de busca
 # - max_pages: número máximo de páginas de resultados (escala de 25 em 25)
 def scrape_jobs(driver, keyword, max_pages=40):
@@ -26,7 +26,7 @@ def scrape_jobs(driver, keyword, max_pages=40):
         url = f"https://www.linkedin.com/jobs/search/?keywords={keyword}&start={start}"
         driver.get(url)
 
-        # Aguarda carregamento inicial dos cards
+        # Aguarda carregamento do primeiro card clicável
         WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, "div.job-card-container--clickable"))
         )
@@ -44,7 +44,7 @@ def scrape_jobs(driver, keyword, max_pages=40):
         # Coleta todos os cards carregados
         cards = driver.find_elements(By.CSS_SELECTOR, "div.job-card-container--clickable[data-job-id]")
         if not cards:
-            print(f"Nenhum card encontrado na página {page + 1}. Encerrando.")
+            print(f"Nenhum card encontrado para '{keyword}' na página {page + 1}. Encerrando este termo.")
             break
 
         for card in cards:
@@ -85,16 +85,16 @@ def scrape_jobs(driver, keyword, max_pages=40):
             except:
                 descricao = "<Descrição não disponível>"
 
-            vaga_info = {
+            # Armazena resultado com o termo de busca
+            resultados.append({
                 "job_id": job_id,
                 "titulo": titulo,
                 "empresa": empresa,
-                "descricao": descricao
-            }
-            print(vaga_info)
-            resultados.append(vaga_info)
+                "descricao": descricao,
+                "keyword": keyword
+            })
 
-        print(f"Página {page + 1} processada. Coletadas até agora: {len(resultados)} vagas.")
+        print(f"Termo '{keyword}': página {page + 1} processada. Vagas até agora: {len(resultados)}.")
         time.sleep(2)
 
     return resultados
@@ -104,13 +104,25 @@ if __name__ == "__main__":
     driver = webdriver.Edge()  # ou webdriver.Chrome()
     try:
         login(driver)
-        vagas = scrape_jobs(driver, keyword="BI", max_pages=40)
+        # Lista de termos de busca
+        keywords = ["analista BI", "analista dados", "cientista dados", "inteligência mercado", "analytics", "business intelligence", "analista negócios", "data analyst"]  # adicione/remova termos conforme necessidade
 
-        # Cria DataFrame
-        df = pd.DataFrame(vagas)
+        all_jobs = []
+        seen_main = set()
+        for kw in keywords:
+            print(f"Iniciando scraping para keyword: {kw}")
+            vagas_kw = scrape_jobs(driver, keyword=kw, max_pages=40)
+            for vaga in vagas_kw:
+                jid = vaga["job_id"]
+                if jid not in seen_main:
+                    seen_main.add(jid)
+                    all_jobs.append(vaga)
+
+        # Cria DataFrame com todos os resultados
+        df = pd.DataFrame(all_jobs)
 
         # Define nome de arquivo sem sobrescrever versões existentes
-        arquivo = "vagas_collected3.xlsx"
+        arquivo = "vagas_collected_multi.xlsx"
         base, ext = os.path.splitext(arquivo)
         i = 1
         while os.path.exists(arquivo):
@@ -119,7 +131,7 @@ if __name__ == "__main__":
 
         # Exporta para Excel
         df.to_excel(arquivo, index=False)
-        print(f"Arquivo '{arquivo}' criado com sucesso com {len(vagas)} vagas.")
+        print(f"Arquivo '{arquivo}' criado com sucesso com {len(all_jobs)} vagas.")
 
     finally:
         driver.quit()

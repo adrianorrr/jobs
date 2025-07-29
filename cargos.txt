@@ -5,6 +5,3 @@ analise de dados
 business inteligence
 bi
 analista de negocios
-
-
-17;37 foi testador
