@@ -14,89 +14,97 @@ def login(driver, wait_time=15):
     print("Faça login manualmente no LinkedIn...")
     time.sleep(wait_time)
 
-# Função para extrair dados das vagas de um termo de busca
-# - keyword: termo de busca
-# - max_pages: número máximo de páginas de resultados (escala de 25 em 25)
-def scrape_jobs(driver, keyword, max_pages=40):
+# Função para extrair dados das vagas de múltiplos termos de busca
+# - max_pages: número máximo de páginas (escala de 25 em 25)
+def scrape_jobs(driver, max_pages=40):
+    # Define internamente a lista de palavras-chave
+    keywords = [
+        "analista BI", "analista dados", "cientista dados", "inteligência mercado",
+        "analytics", "business intelligence", "analista negócios", "data analyst"
+    ]
+
     resultados = []
     seen_ids = set()
 
-    for page in range(max_pages):
-        start = page * 25
-        url = f"https://www.linkedin.com/jobs/search/?keywords={keyword}&start={start}"
-        driver.get(url)
+    for keyword in keywords:
+        print(f"Iniciando scraping para keyword: {keyword}")
+        for page in range(max_pages):
+            start = page * 25
+            url = f"https://www.linkedin.com/jobs/search/?keywords={keyword}&start={start}"
+            driver.get(url)
 
-        # Aguarda carregamento do primeiro card clicável
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, "div.job-card-container--clickable"))
-        )
-        time.sleep(2)
+            # Aguarda carregamento inicial dos cards
+            WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "div.job-card-container--clickable"))
+            )
+            time.sleep(2)
 
-        # Scroll individual por cada <li> para carregar todos os cards
-        li_items = driver.find_elements(By.CSS_SELECTOR, "li.scaffold-layout__list-item[data-occludable-job-id]")
-        for li in li_items:
-            try:
-                driver.execute_script("arguments[0].scrollIntoView(true);", li)
-                time.sleep(0.1)
-            except:
-                continue
+            # Scroll individual por cada <li> para carregar todos os cards
+            li_items = driver.find_elements(By.CSS_SELECTOR, "li.scaffold-layout__list-item[data-occludable-job-id]")
+            for li in li_items:
+                try:
+                    driver.execute_script("arguments[0].scrollIntoView(true);", li)
+                    time.sleep(0.1)
+                except:
+                    continue
 
-        # Coleta todos os cards carregados
-        cards = driver.find_elements(By.CSS_SELECTOR, "div.job-card-container--clickable[data-job-id]")
-        if not cards:
-            print(f"Nenhum card encontrado para '{keyword}' na página {page + 1}. Encerrando este termo.")
-            break
+            # Coleta todos os cards carregados
+            cards = driver.find_elements(By.CSS_SELECTOR, "div.job-card-container--clickable[data-job-id]")
+            if not cards:
+                print(f"Nenhum card encontrado para '{keyword}' na página {page + 1}. Encerrando este termo.")
+                break
 
-        for card in cards:
-            job_id = card.get_attribute("data-job-id")
-            if not job_id or job_id in seen_ids:
-                continue
-            seen_ids.add(job_id)
+            for card in cards:
+                job_id = card.get_attribute("data-job-id")
+                if not job_id or job_id in seen_ids:
+                    continue
+                seen_ids.add(job_id)
 
-            # Título da vaga
-            try:
-                titulo = card.find_element(By.CSS_SELECTOR, "a.job-card-list__title--link").text.strip()
-            except:
-                titulo = "<Título não encontrado>"
+                # Título da vaga
+                try:
+                    titulo = card.find_element(By.CSS_SELECTOR, "a.job-card-list__title--link").text.strip()
+                except:
+                    titulo = "<Título não encontrado>"
 
-            # Clica no card e espera antes de coletar detalhes
-            driver.execute_script("arguments[0].scrollIntoView(true);", card)
-            card.click()
-            time.sleep(random.uniform(2, 4))
+                # Clica no card e espera antes de coletar detalhes
+                driver.execute_script("arguments[0].scrollIntoView(true);", card)
+                card.click()
+                time.sleep(random.uniform(2, 4))
 
-            # Nome da empresa a partir do painel de detalhes
-            try:
-                empresa = driver.find_element(
-                    By.CSS_SELECTOR,
-                    "div.job-details-jobs-unified-top-card__company-name a"
-                ).text.strip()
-            except:
-                empresa = "<Empresa não encontrada>"
+                # Nome da empresa a partir do painel de detalhes
+                try:
+                    empresa = driver.find_element(
+                        By.CSS_SELECTOR,
+                        "div.job-details-jobs-unified-top-card__company-name a"
+                    ).text.strip()
+                except:
+                    empresa = "<Empresa não encontrada>"
 
-            # Coleta descrição do painel lateral
-            try:
-                WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, "div.jobs-box__html-content#job-details"))
-                )
-                descricao = driver.find_element(
-                    By.CSS_SELECTOR,
-                    "div.jobs-box__html-content#job-details"
-                ).text.strip()
-            except:
-                descricao = "<Descrição não disponível>"
+                # Coleta descrição do painel lateral
+                try:
+                    WebDriverWait(driver, 10).until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, "div.jobs-box__html-content#job-details"))
+                    )
+                    descricao = driver.find_element(
+                        By.CSS_SELECTOR,
+                        "div.jobs-box__html-content#job-details"
+                    ).text.strip()
+                except:
+                    descricao = "<Descrição não disponível>"
 
-            # Armazena resultado com o termo de busca
-            resultados.append({
-                "job_id": job_id,
-                "titulo": titulo,
-                "empresa": empresa,
-                "descricao": descricao,
-                "keyword": keyword
-            })
+                vaga_info = {
+                    "job_id": job_id,
+                    "titulo": titulo,
+                    "empresa": empresa,
+                    "descricao": descricao,
+                    "keyword": keyword
+                }
+                # Loga cada vaga coletada no terminal
+                print(vaga_info)
+                resultados.append(vaga_info)
 
-        print(f"Termo '{keyword}': página {page + 1} processada. Vagas até agora: {len(resultados)}.")
-        time.sleep(2)
-
+            print(f"Keyword '{keyword}': página {page + 1} processada. Total vagas até agora: {len(resultados)}.")
+            time.sleep(2)
     return resultados
 
 if __name__ == "__main__":
@@ -104,21 +112,10 @@ if __name__ == "__main__":
     driver = webdriver.Edge()  # ou webdriver.Chrome()
     try:
         login(driver)
-        # Lista de termos de busca
-        keywords = ["analista BI", "analista dados", "cientista dados", "inteligência mercado", "analytics", "business intelligence", "analista negócios", "data analyst"]  # adicione/remova termos conforme necessidade
+        # Executa scraping utilizando keywords definidas internamente
+        all_jobs = scrape_jobs(driver, max_pages=40)
 
-        all_jobs = []
-        seen_main = set()
-        for kw in keywords:
-            print(f"Iniciando scraping para keyword: {kw}")
-            vagas_kw = scrape_jobs(driver, keyword=kw, max_pages=40)
-            for vaga in vagas_kw:
-                jid = vaga["job_id"]
-                if jid not in seen_main:
-                    seen_main.add(jid)
-                    all_jobs.append(vaga)
-
-        # Cria DataFrame com todos os resultados
+        # Cria DataFrame
         df = pd.DataFrame(all_jobs)
 
         # Define nome de arquivo sem sobrescrever versões existentes
@@ -132,6 +129,5 @@ if __name__ == "__main__":
         # Exporta para Excel
         df.to_excel(arquivo, index=False)
         print(f"Arquivo '{arquivo}' criado com sucesso com {len(all_jobs)} vagas.")
-
     finally:
         driver.quit()
