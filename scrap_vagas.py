@@ -1,5 +1,6 @@
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import time
@@ -7,11 +8,31 @@ import random
 import pandas as pd
 import os
 
-# Função para realizar login manual
-# - wait_time: segundos para pausa após abrir a página de login
-def login(driver, wait_time=15):
+# Função para realizar login automático
+# - espera até que os campos de usuário e senha apareçam, preenche com variáveis de ambiente e submete
+# - espera adicional após login para garantir carregamento do perfil
+# Variáveis de ambiente necessárias:
+#   LINKEDIN_USERNAME e LINKEDIN_PASSWORD
+# Exemplo (Linux/macOS): export LINKEDIN_USERNAME='seu_email'; export LINKEDIN_PASSWORD='sua_senha'
+def login(driver, wait_time=5):
+    username = os.environ.get("LINKEDIN_USERNAME")
+    password = os.environ.get("LINKEDIN_PASSWORD")
+    if not username or not password:
+        raise ValueError("Por favor, defina as variáveis de ambiente LINKEDIN_USERNAME e LINKEDIN_PASSWORD")
     driver.get("https://www.linkedin.com/login")
-    print("Faça login manualmente no LinkedIn...")
+    # Aguarda campos de login
+    WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.ID, "username"))
+    )
+    # Preenche credenciais
+    driver.find_element(By.ID, "username").send_keys(username)
+    driver.find_element(By.ID, "password").send_keys(password)
+    # Submete o formulário
+    driver.find_element(By.XPATH, "//button[@type='submit']").click()
+    # Aguarda até que o perfil ou barra de busca esteja disponível
+    WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.CSS_SELECTOR, "input[placeholder='Pesquisar']"))
+    )
     time.sleep(wait_time)
 
 # Função para extrair dados das vagas de múltiplos termos de busca
@@ -108,8 +129,13 @@ def scrape_jobs(driver, max_pages=40):
     return resultados
 
 if __name__ == "__main__":
-    # Configuração do driver (Edge ou Chrome)
-    driver = webdriver.Edge()  # ou webdriver.Chrome()
+    # Configuração do driver em headless opcional
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+
+    driver = webdriver.Chrome(options=chrome_options)
     try:
         login(driver)
         # Executa scraping utilizando keywords definidas internamente
