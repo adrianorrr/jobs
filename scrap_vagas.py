@@ -135,7 +135,7 @@ if __name__ == "__main__":
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
 
-    driver = webdriver.Chrome(options=chrome_options)
+    driver = webdriver.Chrome("/usr/bin/chromedriver", options=chrome_options)
     try:
         login(driver)
         # Executa scraping utilizando keywords definidas internamente
